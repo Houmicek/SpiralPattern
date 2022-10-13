@@ -3,8 +3,6 @@
 #include <Fusion/FusionAll.h>
 #include <CAM/CAMAll.h>
 
-#include <list>
-
 #if defined(_WINDOWS) || defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
 #else
@@ -18,9 +16,9 @@ using namespace adsk::cam;
 // Globals
 Ptr<Application> _app;
 Ptr<UserInterface> _ui;
-std::string _units = "";
 std::string _commandId = "SpiralPatternCmd";
 Ptr<std::string> _errMessage;
+std::string _units = "";
 
 // Input declarations.
 Ptr<SelectionCommandInput> _objectSelection;
@@ -30,28 +28,25 @@ Ptr<ValueCommandInput> _height;
 Ptr<ValueCommandInput> _distance;
 Ptr<ValueCommandInput> _angle;
 
-//debug messages to text command
-Ptr<Palette> _textPalette;
-
 bool getCommandInputValue(Ptr<CommandInput> commandInput, std::string unitType, double* value);
 bool is_digits(const std::string& str);
 Ptr<Selections> getSelectedComponents(Ptr<SelectionCommandInput> selectionInput);
-bool getSelectedAxis(Ptr<SelectionCommandInput>selectionInput, Ptr<Point3D> point, Ptr<Vector3D> normal);
+bool getSelectedAxis(Ptr<SelectionCommandInput>selectionInput, Point3D* point, Vector3D* normal);
 
 bool checkReturn(Ptr<Base> returnObj)
 {
-	if (returnObj)
-		return true;
-	else
-		if (_app && _ui)
-		{
-			std::string errDesc;
-			_app->getLastError(&errDesc);
-			_ui->messageBox(errDesc);
-			return false;
-		}
-		else
-			return false;
+    if (returnObj)
+        return true;
+    else
+        if (_app && _ui)
+        {
+            std::string errDesc;
+            _app->getLastError(&errDesc);
+            _ui->messageBox(errDesc);
+            return false;
+        }
+        else
+            return false;
 }
 
 class GearCommandInputChangedHandler : public adsk::core::InputChangedEventHandler
@@ -81,7 +76,7 @@ public:
         //Update data 
         if (changedInput->id() == _commandId + "_number" || changedInput->id() == _commandId + "_height")
         {
-            _distance->value( occurrencesHeight / (occurrencesCount - 1));
+            _distance->value(occurrencesHeight / (occurrencesCount - 1));
         }
         else if (changedInput->id() == _commandId + "_distance")
         {
@@ -96,7 +91,6 @@ class SpiralPatternCommandExecuteEventHandler : public adsk::core::CommandEventH
 public:
     void notify(const Ptr<CommandEventArgs>& eventArgs) override
     {
-        _ui->messageBox("Execute");
         //Get selected bodies
         Ptr<Selections> occurs = getSelectedComponents(_objectSelection);
         if (!occurs) {
@@ -109,8 +103,8 @@ public:
             return;
         }
 
-        Ptr<Point3D> point;
-        Ptr<Vector3D> normal;
+        Point3D* point = nullptr;
+        Vector3D* normal = nullptr;
         if (!getSelectedAxis(_axisSelection, point, normal)) {
             _ui->messageBox("Something went wrong with Axis selection!");
             return;
@@ -147,23 +141,6 @@ class SpiralPatternCommandCreatedEventHandler : public adsk::core::CommandCreate
 public:
     void notify(const Ptr<CommandCreatedEventArgs>& eventArgs) override
     {
-
-        // Verify that a Fusion design is active.
-        Ptr<Design> des = _app->activeProduct();
-        if (!checkReturn(des))
-        {
-            _ui->messageBox("A Fusion design must be active when invoking this command.");
-            return;
-        }
-
-        // Save the current values as attributes.
-        Ptr<Attributes> attribs = des->attributes();
-        attribs->add("SpiralPattern", "number", std::to_string(_number->valueOne()));
-        attribs->add("SpiralPattern", "distance", std::to_string(_distance->value()));
-        attribs->add("SpiralPattern", "height", std::to_string(_height->value()));
-        attribs->add("SpiralPattern", "angle", std::to_string(_angle->value()));
-
-
         // Define the command dialog.
         //INPUTS --------------------       
         Ptr<Command> cmd = eventArgs->command();
@@ -175,12 +152,14 @@ public:
         _objectSelection = inputs->addSelectionInput(_commandId + "_objects", "Select Component", "Select bodies or occurrences");
         if (!checkReturn(_objectSelection))
             return;
+
         _objectSelection->addSelectionFilter("Occurrences");
         _objectSelection->setSelectionLimits(1);
 
         _axisSelection = inputs->addSelectionInput(_commandId + "_axis", "Select axis", "Select edge or axis of rotation");
         if (!checkReturn(_axisSelection))
             return;
+
         _axisSelection->addSelectionFilter("CylindricalFaces");
         _axisSelection->addSelectionFilter("LinearEdges");
         _axisSelection->addSelectionFilter("ConstructionLines");
@@ -189,8 +168,8 @@ public:
 
         _number = inputs->addIntegerSliderCommandInput(_commandId + "_number", "Number of Occurrences", 2, 100);
         _height = inputs->addValueInput(_commandId + "_height", "Height Total", "m", adsk::core::ValueInput::createByReal(100));
-        _distance = inputs->addValueInput(_commandId + "_distance", "Occurences Distance","mm", adsk::core::ValueInput::createByReal(25));
-        _angle = inputs->addValueInput(_commandId + "_angle", "Occurences Angle","deg", adsk::core::ValueInput::createByString("20"));
+        _distance = inputs->addValueInput(_commandId + "_distance", "Occurences Distance", "mm", adsk::core::ValueInput::createByReal(25));
+        _angle = inputs->addValueInput(_commandId + "_angle", "Occurences Angle", "deg", adsk::core::ValueInput::createByString("20"));
 
         _distance->value(5);
 
@@ -199,7 +178,7 @@ public:
         if (!inputChangedEvent)
             return;
 
-        bool isOk = inputChangedEvent->add(& _cmdInputChanged);
+        bool isOk = inputChangedEvent->add(&_cmdInputChanged);
         if (!isOk)
             return;
 
@@ -207,7 +186,7 @@ public:
         if (!validateInputsEvent)
             return;
 
-        isOk = validateInputsEvent->add(& _cmdValidateInputs);
+        isOk = validateInputsEvent->add(&_cmdValidateInputs);
         if (!isOk)
             return;
 
@@ -215,7 +194,7 @@ public:
         if (!executeEvent)
             return;
 
-        isOk = executeEvent->add(& _spiralPatternCommandExecute);
+        isOk = executeEvent->add(&_spiralPatternCommandExecute);
         if (!isOk)
             return;
 
@@ -223,46 +202,47 @@ public:
         if (!destroyEvent)
             return;
 
-        isOk = destroyEvent->add(& _cmdDestroy);
+        isOk = destroyEvent->add(&_cmdDestroy);
         if (!isOk)
             return;
-
     }
 } _spiralPatternCommandCreated;
 
 extern "C" XI_EXPORT bool run(const char* context)
 {
-	_app = Application::get();
-	if (!_app)
-		return false;
+    _app = Application::get();
+    if (!_app)
+        return false;
 
-	_ui = _app->userInterface();
-	if (!_ui)
-		return false;
+    _ui = _app->userInterface();
+    if (!_ui)
+        return false;
 
-	// Create a command definition and add a button to the CREATE panel.
-	Ptr<CommandDefinition> cmdDef = _ui->commandDefinitions()->itemById("SpiralPattern");
-	if (!cmdDef)
-	{
-		cmdDef = _ui->commandDefinitions()->addButtonDefinition("SpiralPattern", "Spiral Pattern", "Creates pattern along spiral path", "");
-		if (!checkReturn(cmdDef))
-			return false;
-	}
+    // Create a command definition and add a button to the CREATE panel.
+    Ptr<CommandDefinition> cmdDef = _ui->commandDefinitions()->itemById("SpiralPattern");
+    if (!cmdDef)
+    {
+        cmdDef = _ui->commandDefinitions()->addButtonDefinition("SpiralPattern", "Spiral Pattern", "Creates pattern along spiral path", "");
+        if (!checkReturn(cmdDef))
+            return false;
+    }
 
-	// Connect to the command created event.
-	Ptr<CommandCreatedEvent> commandCreatedEvent = cmdDef->commandCreated();
-	if (!checkReturn(commandCreatedEvent))
-		return false;
+    // Connect to the command created event.
+    Ptr<CommandCreatedEvent> commandCreatedEvent = cmdDef->commandCreated();
+    if (!checkReturn(commandCreatedEvent))
+        return false;
 
-	bool isOk = commandCreatedEvent->add(& _spiralPatternCommandCreated);
-	if (!isOk)
-		return false;
+    bool isOk = commandCreatedEvent->add(&_spiralPatternCommandCreated);
+    if (!isOk)
+        return false;
 
-	isOk = cmdDef->execute();
-	if (!isOk)
-		return false;
+    isOk = cmdDef->execute();
+    if (!isOk)
+        return false;
 
- 	return true;
+    adsk::autoTerminate(false);
+
+    return true;
 }
 
 bool is_digits(const std::string& str)
@@ -281,7 +261,7 @@ bool is_digits(const std::string& str)
 bool getCommandInputValue(Ptr<CommandInput> commandInput, std::string unitType, double* value)
 {
     Ptr<ValueCommandInput> valCommandInput = commandInput;
-    if (!commandInput)
+    if (!valCommandInput)
     {
         *value = 0;
         return false;
@@ -304,20 +284,19 @@ bool getCommandInputValue(Ptr<CommandInput> commandInput, std::string unitType, 
 }
 
 ///SELECTION
-Ptr<Selections> getSelectedComponents (Ptr<SelectionCommandInput> selectionInput) {//Get bodies
+Ptr<Selections> getSelectedComponents(Ptr<SelectionCommandInput> selectionInput) {//Get bodies
 
-    Ptr<Selections> occurs ;
+    Ptr<Selections> occurs;
     for (int x = 0; x < selectionInput->selectionCount(); ++x) {
         Ptr<Selection> selection = selectionInput->selection(x);
         if (!selection)
             return occurs;
-        
+
         Ptr<Occurrence> occur = selection->entity();
         if (!occur)
             return occurs;
-        
+
         if ("adsk::fusion::Occurrence" == std::string(occur->objectType())) {
-            _ui->messageBox("Before Add Occurrence!");
             occurs->add(selection);
             _ui->messageBox("Add Occurrence!");
         }
@@ -363,7 +342,7 @@ bool getGeometry(Ptr<Base> entity, Ptr<Point3D> point, Ptr<Vector3D> normal)
     }
 }
 
-bool getSelectedAxis (Ptr<SelectionCommandInput>selectionInput, Ptr<Point3D> point, Ptr<Vector3D> normal) {//Get axis
+bool getSelectedAxis(Ptr<SelectionCommandInput>selectionInput, Point3D* point, Vector3D* normal) {//Get axis
    //Tuple: 0 = [Point3D - origin], 1 = [Vector3D - direction]
     Ptr<Selection> selection = selectionInput->selection(0);
     if (!selection)
@@ -384,13 +363,13 @@ bool getSelectedAxis (Ptr<SelectionCommandInput>selectionInput, Ptr<Point3D> poi
     }
     else if ("adsk::fusion::BRepFace" == std::string(selectedObj->objectType())) {//Cylindrical faces
         Ptr<Cylinder> face(selectedObj);
-        Ptr<Vector3D> v = adsk::core::Vector3D::create(face->axis());
-        point = face->origin();
-        normal = v;
+
+        point = face->origin().getCopy();
+        normal = adsk::core::Vector3D::create(face->axis()).getCopy();
     }
 
     return true;
-};
+}
 
 #ifdef XI_WIN
 
@@ -398,15 +377,15 @@ bool getSelectedAxis (Ptr<SelectionCommandInput>selectionInput, Ptr<Point3D> poi
 
 BOOL APIENTRY DllMain(HMODULE hmodule, DWORD reason, LPVOID reserved)
 {
-	switch (reason)
-	{
-	case DLL_PROCESS_ATTACH:
-	case DLL_THREAD_ATTACH:
-	case DLL_THREAD_DETACH:
-	case DLL_PROCESS_DETACH:
-		break;
-	}
-	return TRUE;
+    switch (reason)
+    {
+    case DLL_PROCESS_ATTACH:
+    case DLL_THREAD_ATTACH:
+    case DLL_THREAD_DETACH:
+    case DLL_PROCESS_DETACH:
+        break;
+    }
+    return TRUE;
 }
 
 #endif // XI_WIN

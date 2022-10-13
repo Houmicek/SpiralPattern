@@ -3,7 +3,7 @@
 	"type":	"script",
 	"author":	"Pavel Holecek",
 	"description":	{
-		"":	"Based on user request to have pattern along spiral path"
+		"":	""
 	},
 	"supportedOS":	"windows|mac",
 	"editEnabled":	true,
