@@ -3,6 +3,8 @@
 #include <Fusion/FusionAll.h>
 #include <CAM/CAMAll.h>
 
+#include <list>
+
 #if defined(_WINDOWS) || defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
 #else
@@ -19,6 +21,9 @@ Ptr<UserInterface> _ui;
 std::string _commandId = "SpiralPatternCmd";
 Ptr<std::string> _errMessage;
 std::string _units = "";
+std::list<Ptr<Base>> _occurrences;
+Ptr<Point3D> _point;
+Ptr<Vector3D> _normal;
 
 // Input declarations.
 Ptr<SelectionCommandInput> _objectSelection;
@@ -28,10 +33,11 @@ Ptr<ValueCommandInput> _height;
 Ptr<ValueCommandInput> _distance;
 Ptr<ValueCommandInput> _angle;
 
+
 bool getCommandInputValue(Ptr<CommandInput> commandInput, std::string unitType, double* value);
 bool is_digits(const std::string& str);
-Ptr<Selections> getSelectedComponents(Ptr<SelectionCommandInput> selectionInput);
-bool getSelectedAxis(Ptr<SelectionCommandInput>selectionInput, Point3D* point, Vector3D* normal);
+bool getSelectedComponents(Ptr<SelectionCommandInput> selectionInput);
+bool getSelectedAxis(Ptr<SelectionCommandInput>selectionInput);
 
 bool checkReturn(Ptr<Base> returnObj)
 {
@@ -91,26 +97,27 @@ class SpiralPatternCommandExecuteEventHandler : public adsk::core::CommandEventH
 public:
     void notify(const Ptr<CommandEventArgs>& eventArgs) override
     {
+        _point = nullptr;
+        _normal = nullptr;
+
         //Get selected bodies
-        Ptr<Selections> occurs = getSelectedComponents(_objectSelection);
-        if (!occurs) {
+        _occurrences.clear();
+        if (!getSelectedComponents(_objectSelection)) {
             _ui->messageBox("Something went wrong with Component selection!");
             return;
         }
 
-        if (occurs->count() == 0) {
+        if (_occurrences.size() == 0) {
             _ui->messageBox("No Components were selected!");
             return;
         }
 
-        Point3D* point = nullptr;
-        Vector3D* normal = nullptr;
-        if (!getSelectedAxis(_axisSelection, point, normal)) {
+        if (!getSelectedAxis(_axisSelection)) {
             _ui->messageBox("Something went wrong with Axis selection!");
             return;
         }
 
-        if (!point || !normal) {
+        if (!_point || !_normal) {
             _ui->messageBox("No Axis was selected!");
             return;
         }
@@ -284,65 +291,27 @@ bool getCommandInputValue(Ptr<CommandInput> commandInput, std::string unitType, 
 }
 
 ///SELECTION
-Ptr<Selections> getSelectedComponents(Ptr<SelectionCommandInput> selectionInput) {//Get bodies
+bool getSelectedComponents(Ptr<SelectionCommandInput> selectionInput) {//Get bodies
 
     Ptr<Selections> occurs;
     for (int x = 0; x < selectionInput->selectionCount(); ++x) {
         Ptr<Selection> selection = selectionInput->selection(x);
         if (!selection)
-            return occurs;
+            return false;
 
         Ptr<Occurrence> occur = selection->entity();
         if (!occur)
-            return occurs;
+            return false;
 
         if ("adsk::fusion::Occurrence" == std::string(occur->objectType())) {
-            occurs->add(selection);
-            _ui->messageBox("Add Occurrence!");
+            _occurrences.push_back(occur);
+            //_ui->messageBox("Add Occurrence!");
         }
     }
-    return occurs;
+    return true;
 }
 
-bool getGeometry(Ptr<Base> entity, Ptr<Point3D> point, Ptr<Vector3D> normal)
-{
-    _ui->messageBox(entity->objectType());
-    if (entity->objectType() == "adsk::core::Arc3D")
-    {
-        Ptr<Arc3D> arc(entity);
-        if (!arc)
-            return false;
-
-        point = arc->center();
-        normal = arc->normal();
-        return true;
-    }
-    else if (entity->objectType() == "adsk::core::Circle3D") {//Arc Edge or Circle Edge
-
-        Ptr<Circle3D> circle(entity);
-        if (!circle)
-            return false;
-
-        point = circle->center();
-        normal = circle->normal();
-        return true;
-    }
-    else if (entity->objectType() == "adsk::core::InfiniteLine3D") { //Construction Axis
-        Ptr<InfiniteLine3D> line(entity);
-        if (!line)
-            return false;
-
-        point = line->origin();
-        normal = line->direction();
-        return true;
-    }
-    else {//other
-        _ui->messageBox("unknown geometry!!!");
-        return false;
-    }
-}
-
-bool getSelectedAxis(Ptr<SelectionCommandInput>selectionInput, Point3D* point, Vector3D* normal) {//Get axis
+bool getSelectedAxis(Ptr<SelectionCommandInput>selectionInput) {//Get axis
    //Tuple: 0 = [Point3D - origin], 1 = [Vector3D - direction]
     Ptr<Selection> selection = selectionInput->selection(0);
     if (!selection)
@@ -352,23 +321,74 @@ bool getSelectedAxis(Ptr<SelectionCommandInput>selectionInput, Point3D* point, V
     if (!selectedObj)
         return false;
 
-    _ui->messageBox(selectedObj->objectType());
-    if ("adsk::fusion::BRepEdge" == std::string(selectedObj->objectType()) ||
-        "adsk::fusion::ConstructionAxis" == std::string(selectedObj->objectType()))
+    //_ui->messageBox(selectedObj->objectType());
+    if ("adsk::fusion::BRepEdge" == std::string(selectedObj->objectType()))
     {
-        if (!getGeometry(selectedObj, point, normal))
-        {
+        Ptr<BRepEdge> edge = selectedObj;
+        if (!edge)
             return false;
+
+        if (std::string(edge->geometry()->objectType()) == "adsk::core::Arc3D") {
+            Ptr<Arc3D> arc = edge->geometry();
+            if (!arc)
+                return false;
+
+            _point = arc->center();
+            _normal = arc->normal();
+            return true;
+        }
+        else if (std::string(edge->geometry()->objectType()) == "adsk::core::Circle3D") {//Arc Edge or Circle Edge
+
+            Ptr<Circle3D> circle = edge->geometry();
+            if (!circle)
+                return false;
+
+            _point = circle->center();
+            _normal = circle->normal();
+            return true;
+        }
+        else if (std::string(edge->geometry()->objectType()) == "adsk::core::Line3D") {//Arc Edge or Circle Edge
+
+            Ptr<Circle3D> circle = edge->geometry();
+            if (!circle)
+                return false;
+
+            _point = circle->center();
+            _normal = circle->normal();
+            return true;
+        }
+    }
+    else if("adsk::fusion::ConstructionAxis" == std::string(selectedObj->objectType()))
+    {
+        Ptr<ConstructionAxis> axis = selectedObj;
+        if (!axis)
+            return false;
+
+        if (axis->geometry()->objectType() == "adsk::core::InfiniteLine3D") { //Construction Axis
+            Ptr<InfiniteLine3D> line = axis->geometry();
+            if (!line)
+                return false;
+
+            _point = line->origin();
+            _normal = line->direction();
+            return true;
         }
     }
     else if ("adsk::fusion::BRepFace" == std::string(selectedObj->objectType())) {//Cylindrical faces
-        Ptr<Cylinder> face(selectedObj);
+        Ptr<BRepFace> brep = selectedObj;
+        if (!brep)
+            return false;
 
-        point = face->origin().getCopy();
-        normal = adsk::core::Vector3D::create(face->axis()).getCopy();
+        Ptr<Cylinder> face = brep->geometry();
+        if (!face)
+            return false;
+
+        _point = face->origin();
+        _normal = face->axis();
+        return true;
     }
 
-    return true;
+    return false;
 }
 
 #ifdef XI_WIN
