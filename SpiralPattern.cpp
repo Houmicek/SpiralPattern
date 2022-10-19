@@ -1,4 +1,12 @@
+/**************************************************************************************
+  Author-Pavel Holecek
+  Description-Creates components in spiral pattern.
 
+  AUTODESK PROVIDES THIS PROGRAM "AS IS" AND WITH ALL FAULTS. AUTODESK SPECIFICALLY
+  DISCLAIMS ANY IMPLIED WARRANTY OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR USE.
+  AUTODESK, INC. DOES NOT WARRANT THAT THE OPERATION OF THE PROGRAM WILL BE
+  UNINTERRUPTED OR ERROR FREE.
+***************************************************************************************/
 #include <Core/CoreAll.h>
 #include <Fusion/FusionAll.h>
 #include <CAM/CAMAll.h>
