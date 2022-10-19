@@ -110,29 +110,25 @@ bool generateSpiralPattern()
     //create new occurences
     double distance = _distance->value();
     double angle = _angle->value();
-    int copies = _number->valueOne();
-    Ptr<Point3D> point1 = Point3D::create(_vector->x(), _vector->y(), _vector->z());
-    Ptr<Point3D> point2 = Point3D::create(_vector->asPoint());
-    Ptr<Point3D> point3 = Point3D::create(_point);
-
-    _ui->messageBox("1: " + std::to_string(point1->x()) + ", " + std::to_string(point1->y()) + ", " + std::to_string(point1->z()) + "\n2: " + std::to_string(point2->x()) + ", " + std::to_string(point2->y()) + ", " + std::to_string(point2->z()) + "\n3: " + std::to_string(point3->x()) + ", " + std::to_string(point3->y()) + ", " + std::to_string(point3->z()));
-
-    for (int i = 1; i < copies; ++i)
+    //_ui->messageBox("X " + std::to_string(_point->x()) + " Y " + std::to_string(_point->y()) + " Z " + std::to_string(_point->z()));
+    //_ui->messageBox("X " + std::to_string(_vector->x()) + " Y " + std::to_string(_vector->y()) + " Z " + std::to_string(_vector->z()));
+    
+    for (int i = 1; i < _number->valueOne(); ++i)
     {
-        Ptr<Vector3D> translationVector = Vector3D::create(_vector);
+        Ptr<Vector3D> translationVector = Vector3D::create(_vector->x(), _vector->y(), _vector->z());
         if (!translationVector)
-            return false;
+            return false;        
 
         if (!translationVector->normalize())
             return false;
 
         if(!translationVector->scaleBy(distance * i)) //Modify vertor - to get distance between each stair
             return false;
-
+        
         if(!moveMatrix->translation(translationVector))//Move matrix
             return false;
 
-        if (!translation->setToRotation(angle * i, _vector, point1))
+        if (!translation->setToRotation(angle * i, _vector, _point))
             return false;
 
         if (!translation->transformBy(moveMatrix))
@@ -149,7 +145,7 @@ bool generateSpiralPattern()
                     return false;
                 
                 if (!component->isValid() || !(*iter)->isValid())
-                _ui->messageBox("Componen is not valid");
+                    _ui->messageBox("Componen is not valid");
 
                 Ptr<Occurrence> oc = rootComponent->occurrences()->addExistingComponent(component, translation);
                 if (!oc)
@@ -192,6 +188,8 @@ public:
             return;
         }
 
+
+
         if (!generateSpiralPattern()) {
             _ui->messageBox("Pattern was not created!");
             return;
@@ -231,13 +229,6 @@ public:
         if (!checkReturn(inputs))
             return;
 
-        _objectSelection = inputs->addSelectionInput(_commandId + "_objects", "Select Component", "Select bodies or occurrences");
-        if (!checkReturn(_objectSelection))
-            return;
-
-        _objectSelection->addSelectionFilter("Occurrences");
-        _objectSelection->setSelectionLimits(1);
-
         _axisSelection = inputs->addSelectionInput(_commandId + "_axis", "Select axis", "Select edge or axis of rotation");
         if (!checkReturn(_axisSelection))
             return;
@@ -247,6 +238,13 @@ public:
         _axisSelection->addSelectionFilter("ConstructionLines");
         _axisSelection->addSelectionFilter("CircularEdges");
         _axisSelection->setSelectionLimits(1, 1);
+
+        _objectSelection = inputs->addSelectionInput(_commandId + "_objects", "Select Component", "Select bodies or occurrences");
+        if (!checkReturn(_objectSelection))
+            return;
+
+        _objectSelection->addSelectionFilter("Occurrences");
+        _objectSelection->setSelectionLimits(1);
 
         _number = inputs->addIntegerSliderCommandInput(_commandId + "_number", "Number of Occurrences", 2, 100);
         _height = inputs->addValueInput(_commandId + "_height", "Height Total", "m", adsk::core::ValueInput::createByReal(100));
@@ -411,7 +409,10 @@ bool getSelectedAxis(Ptr<SelectionCommandInput>selectionInput) {//Get axis
             if (!arc)
                 return false;
 
-            _point = arc->center();
+            double data;
+            Ptr<Vector3D> refVector;
+            arc->getData(_point, _vector, refVector, data, data, data);
+            _ui->messageBox("X " + std::to_string(_point->x()) + " Y " + std::to_string(_point->y()) + " Z " + std::to_string(_point->z()));
             _vector = arc->normal();
             return true;
         }
@@ -461,9 +462,9 @@ bool getSelectedAxis(Ptr<SelectionCommandInput>selectionInput) {//Get axis
         if (!face)
             return false;
 
-        _point = face->axis()->asPoint();
-        _vector = face->axis();
-        return true;
+        double radius;
+        Ptr<Vector3D> vector;
+        return face->getData(_point, _vector, radius);
     }
 
     return false;
