@@ -90,7 +90,6 @@ public:
             _height->value(occurrencesLevelDistance * (occurrencesCount - 1));
         }
         std::string text = "Angle: " + std::to_string(_angle->value()) + "\nDistance: " + std::to_string(_distance->value()) + "\nTotal: " + std::to_string(_height->value()) + "\nNumber: " + std::to_string(_number->valueOne());
-        //_ui->messageBox(text);
     }
 } _cmdInputChanged;
 
@@ -108,30 +107,25 @@ bool generateSpiralPattern()
     Ptr<Matrix3D> moveMatrix = Matrix3D::create();
 
     //create new occurences
-    double distance = _distance->value();
-    double angle = _angle->value();
-    //_ui->messageBox("X " + std::to_string(_point->x()) + " Y " + std::to_string(_point->y()) + " Z " + std::to_string(_point->z()));
-    //_ui->messageBox("X " + std::to_string(_vector->x()) + " Y " + std::to_string(_vector->y()) + " Z " + std::to_string(_vector->z()));
-    
     for (int i = 1; i < _number->valueOne(); ++i)
     {
         Ptr<Vector3D> translationVector = Vector3D::create(_vector->x(), _vector->y(), _vector->z());
         if (!translationVector)
             return false;        
 
-        if (!translationVector->normalize())
+        if (!translationVector->normalize()) //Normalize vector (e.g. <0,0,1>)
             return false;
 
-        if(!translationVector->scaleBy(distance * i)) //Modify vertor - to get distance between each stair
+        if(!translationVector->scaleBy(_distance->value() * i)) //Modify vertor - to get distance between each stair
             return false;
         
-        if(!moveMatrix->translation(translationVector))//Move matrix
+        if(!moveMatrix->translation(translationVector))//Apply distance to move matrix
             return false;
 
-        if (!translation->setToRotation(angle * i, _vector, _point))
+        if (!translation->setToRotation(_angle->value() * i, _vector, _point))//Set rotation for each occurrence
             return false;
 
-        if (!translation->transformBy(moveMatrix))
+        if (!translation->transformBy(moveMatrix))//Transform translatiom matrix by moveMatrix
             return false;
 
         std::list<Ptr<Occurrence>>::iterator iter;
@@ -140,13 +134,15 @@ bool generateSpiralPattern()
             if ((*iter)->name() != rootComponent->name() && 
                 std::string((*iter)->objectType()) == "adsk::fusion::Occurrence")
             {
-                Ptr<Component> component = (* iter)->component();
+                //define a component from an occurrece
+                Ptr<Component> component = (* iter)->component(); 
                 if (!component)
                     return false;
                 
                 if (!component->isValid() || !(*iter)->isValid())
                     _ui->messageBox("Componen is not valid");
 
+                //Add a componenet with it's rotation and distance
                 Ptr<Occurrence> oc = rootComponent->occurrences()->addExistingComponent(component, translation);
                 if (!oc)
                     return false;
@@ -178,6 +174,7 @@ public:
             return;
         }
 
+        //Select rotation axis
         if (!getSelectedAxis(_axisSelection)) {
             _ui->messageBox("Something went wrong with Axis selection!");
             return;
@@ -188,8 +185,7 @@ public:
             return;
         }
 
-
-
+        //Generate new components (Pattern)
         if (!generateSpiralPattern()) {
             _ui->messageBox("Pattern was not created!");
             return;
@@ -202,7 +198,7 @@ class SpiralPatternCommandValidateInputsEventHandler : public adsk::core::Valida
 public:
     void notify(const Ptr<ValidateInputsEventArgs>& eventArgs) override
     {
-        
+
     }
 } _cmdValidateInputs;
 
@@ -229,6 +225,7 @@ public:
         if (!checkReturn(inputs))
             return;
 
+        //Set Asix selection Input 
         _axisSelection = inputs->addSelectionInput(_commandId + "_axis", "Select axis", "Select edge or axis of rotation");
         if (!checkReturn(_axisSelection))
             return;
@@ -239,6 +236,7 @@ public:
         _axisSelection->addSelectionFilter("CircularEdges");
         _axisSelection->setSelectionLimits(1, 1);
 
+        //Set Object Selection Input
         _objectSelection = inputs->addSelectionInput(_commandId + "_objects", "Select Component", "Select bodies or occurrences");
         if (!checkReturn(_objectSelection))
             return;
@@ -251,6 +249,8 @@ public:
         _distance = inputs->addValueInput(_commandId + "_distance", "Occurences Distance", "mm", adsk::core::ValueInput::createByReal(25));
         _angle = inputs->addValueInput(_commandId + "_angle", "Occurences Angle", "deg", adsk::core::ValueInput::createByString("20"));
 
+        //Set default values
+        _number->valueOne(5);
         _distance->value(5);
 
         // Connect to the command related events.
@@ -262,7 +262,7 @@ public:
         if (!isOk)
             return;
 
-        Ptr<ValidateInputsEvent> validateInputsEvent = cmd->validateInputs();
+        Ptr<ValidateInputsEvent> validateInputsEvent = cmd->validateInputs(); //Empty no needed
         if (!validateInputsEvent)
             return;
 
@@ -379,6 +379,7 @@ bool getSelectedComponents(Ptr<SelectionCommandInput> selectionInput) {//Get bod
         if (!occur->isValid())
             return false;
 
+        //Add occurece object only
         if ("adsk::fusion::Occurrence" == std::string(occur->objectType())) {
             _occurrences.push_back(occur);
         }
@@ -388,7 +389,7 @@ bool getSelectedComponents(Ptr<SelectionCommandInput> selectionInput) {//Get bod
 }
 
 bool getSelectedAxis(Ptr<SelectionCommandInput>selectionInput) {//Get axis
-   //Tuple: 0 = [Point3D - origin], 1 = [Vector3D - direction]
+
     Ptr<Selection> selection = selectionInput->selection(0);
     if (!selection)
         return false;
@@ -397,43 +398,41 @@ bool getSelectedAxis(Ptr<SelectionCommandInput>selectionInput) {//Get axis
     if (!selectedObj)
         return false;
 
-    //_ui->messageBox(selectedObj->objectType());
     if ("adsk::fusion::BRepEdge" == std::string(selectedObj->objectType()))
     {
         Ptr<BRepEdge> edge = selectedObj;
         if (!edge)
             return false;
 
-        if (std::string(edge->geometry()->objectType()) == "adsk::core::Arc3D") {
+        if ("adsk::core::Arc3D" == std::string(edge->geometry()->objectType())) {
             Ptr<Arc3D> arc = edge->geometry();
             if (!arc)
                 return false;
 
             double data;
             Ptr<Vector3D> refVector;
-            arc->getData(_point, _vector, refVector, data, data, data);
-            _ui->messageBox("X " + std::to_string(_point->x()) + " Y " + std::to_string(_point->y()) + " Z " + std::to_string(_point->z()));
-            _vector = arc->normal();
-            return true;
+            return arc->getData(_point, _vector, refVector, data, data, data);
         }
-        else if (std::string(edge->geometry()->objectType()) == "adsk::core::Circle3D") {//Arc Edge or Circle Edge
+        else if ("adsk::core::Circle3D" == std::string(edge->geometry()->objectType())) {//Arc Edge or Circle Edge
 
             Ptr<Circle3D> circle = edge->geometry();
             if (!circle)
                 return false;
 
-            _point = circle->center();
-            _vector = circle->normal();
-            return true;
+            double radius;
+            return circle->getData(_point, _vector, radius);
         }
-        else if (std::string(edge->geometry()->objectType()) == "adsk::core::Line3D") {//Arc Edge or Circle Edge
+        else if ("adsk::core::Line3D" == std::string(edge->geometry()->objectType())) {//Arc Edge or Circle Edge
 
             Ptr<Line3D> line = edge->geometry();
             if (!line)
                 return false;
 
-            _point = line->startPoint();
-            _vector = Vector3D::create(line->endPoint());
+            Ptr<Point3D> endPoint;
+            if (!line->getData(_point, endPoint))
+                return false;
+
+            _vector = Vector3D::create(endPoint->x() - _point->x(), endPoint->y()-_point->y(), endPoint->z() - _point->z());
             return true;
         }
     }
@@ -442,15 +441,13 @@ bool getSelectedAxis(Ptr<SelectionCommandInput>selectionInput) {//Get axis
         Ptr<ConstructionAxis> axis = selectedObj;
         if (!axis)
             return false;
-
-        if (axis->geometry()->objectType() == "adsk::core::InfiniteLine3D") { //Construction Axis
+        
+        if ("adsk::core::InfiniteLine3D" == std::string(axis->geometry()->objectType())) { //Construction Axis
             Ptr<InfiniteLine3D> line = axis->geometry();
             if (!line)
                 return false;
 
-            _point = line->origin();
-            _vector = line->direction();
-            return true;
+            return line->getData(_point, _vector);
         }
     }
     else if ("adsk::fusion::BRepFace" == std::string(selectedObj->objectType())) {//Cylindrical faces
@@ -463,7 +460,6 @@ bool getSelectedAxis(Ptr<SelectionCommandInput>selectionInput) {//Get axis
             return false;
 
         double radius;
-        Ptr<Vector3D> vector;
         return face->getData(_point, _vector, radius);
     }
 
